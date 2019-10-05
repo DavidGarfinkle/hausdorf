@@ -1,0 +1,5 @@
+numpy
+pandas
+tqdm
+music21
+psycopg2

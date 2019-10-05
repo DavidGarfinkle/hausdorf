@@ -1,0 +1,26 @@
+version: "3.1"
+
+services:
+  db:
+    image: postgres:12
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./postgres-data:/var/lib/postgresql/data
+  pgrst:
+    image: postgrest/postgrest:latest
+    environment:
+      - PGRST_DB_URI=postgres://postgres:postgres@db:5432/postgres
+      - PGRST_DB_SCHEMA=public
+      - PGRST_DB_ANON_ROLE=postgres
+    depends_on:
+      - "db"
+    ports:
+      - "3000:3000"
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./conf/nginx.conf:/etc/nginx/conf.d/cbsmr.conf
+    ports:
+      - "80:80"
