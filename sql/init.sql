@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS Piece (
   pid SERIAL PRIMARY KEY,
-  fmt VARCHAR(8),
+  fmt TEXT,
   data BYTEA,
   name TEXT,
   collection_id INTEGER
@@ -31,6 +31,6 @@ CREATE TABLE IF NOT EXISTS Posting (
   u INTEGER,
   v INTEGER,
   nid INTEGER,
-  FOREIGN KEY (pid, nid) REFERENCES Note(pid, nid),
-  FOREIGN KEY (pid, u, v) REFERENCES NormalizedWindow(pid, u, v)
+  FOREIGN KEY (pid, nid) REFERENCES Note(pid, nid)
+  --FOREIGN KEY (pid, u, v) REFERENCES NormalizedWindow(pid, u, v)
 );

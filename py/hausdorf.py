@@ -1,6 +1,6 @@
 import sys
 import os
-import indexers
+from smrpy import indexers
 import music21
 import itertools
 import psycopg2
@@ -8,6 +8,20 @@ from tqdm import tqdm
 from io import StringIO
 from collections import Counter
 from dataclasses import dataclass
+
+try:
+    plpy
+except NameError:
+    plpy = False
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger()
+
+def log(msg):
+    if plpy:
+        plpy.warning(msg)
+    else:
+        logger.debug(msg)
 
 WINDOW = 10
 BINS = {}
@@ -22,17 +36,23 @@ def stream_to_xml(stream):
   sys.stdout = sys.__stdout__
   return output
 
+def execute(sql_query):
+  conn = psycopg2.connect("")
+  with conn, conn.cursor() as cur:
+    return cur.execute(sql_query)
+
 @dataclass
 class Piece:
-  fmt: str
-  name: str
-  stream: music21.stream.Stream
+  data: bytes
+  fmt: str = ""
+  name: str = ""
   collection_id: int = 0
 
   def __post_init__(self):
-    self.xml = stream_to_xml(self.stream)
-    self.notes = [Note(n.offset, n.offset + n.duration.quarterLength, n.pitch.ps, i) for i, n in enumerate(indexers.NotePointSet(self.stream))]
-    self.windows = list(generate_normalized_windows(self.stream, WINDOW))
+    stream = music21.converter.parse(self.data)
+    self.xml = stream_to_xml(stream)
+    self.notes = [Note(n.offset, n.offset + n.duration.quarterLength, n.pitch.ps, i) for i, n in enumerate(indexers.NotePointSet(stream))]
+    self.windows = list(generate_normalized_windows(stream, WINDOW))
 
   def insert_postgres(self):
     conn = psycopg2.connect("")
@@ -66,6 +86,7 @@ class Piece:
                 VALUES ('(%s, %s)', %s, %s, %s, %s);""", (n.onset, n.pitch, pid, u.index, v.index, n.index))
 
 
+
 def query_postgres(stream):
     conn = psycopg2.connect("")
     matches = {}
@@ -91,9 +112,22 @@ class Note:
     def __hash__(self):
       return hash((self.onset, self.pitch))
 
-    def getquoted(self):
-      return bytes("( %s, %s )" % (self.onset, self.pitch), encoding='utf-8')
+    def insert_str(self):
+        return
+        """
+        INSERT INTO Note(n, pid, nid)
+        VALUES ('( %s, %s )', %s, %s);
+        """,
+        ("integer",) * 4
+        (n.onset, n.pitch, pid, n.index)
 
+    def insert(self):
+      query, types, values = self.insert_str()
+      if plpy:
+        plan = plpy.prepare(query, types)
+        plan.execute(values)
+      else:
+        execute(query)
 
 def normalize(window, basis):
     u, v = basis
@@ -141,6 +175,14 @@ def generate_normalized_windows(stream, window_size):
         for u, v in ((u, v) for u, v in bases if u.onset != v.onset):
             yield (u,v), normalize(window, (u,v))
 
+def generate_normalized_windows_with_notes(notes, window_size):
+    
+    for i in range(min(len(notes) - window_size + 1, len(notes))):
+        window = notes[i:i+window_size]
+        bases = [(window[0], window[i]) for i in range(1, len(window))]
+        for u, v in ((u, v) for u, v in bases if u.onset != v.onset):
+            yield (u,v), normalize(window, (u,v))
+
 def parse_filename(path):
   fmt = path[-3:]
   name = os.path.basename(path)
@@ -150,9 +192,10 @@ if __name__ == "__main__":
   control = sys.argv[1]
   filename = sys.argv[2]
   if control == "index":
-    stream = music21.converter.parse(filename)
+    with open(filename, "rb") as f:
+        data = f.read()
     fmt, name = parse_filename(filename)
-    p = Piece(stream=stream, fmt=fmt, name=name)
+    p = Piece(data=data, fmt=fmt, name=name)
     p.insert_postgres()
 
     #s = music21.converter.parse("tests/testdata/lemstrom2011/leiermann.xml")
