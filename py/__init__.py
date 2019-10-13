@@ -1,3 +1,4 @@
+from collections import namedtuple
 from smrpy.piece import Piece, Note
 from smrpy.hausdorf import generate_normalized_windows_with_notes
 
@@ -45,16 +46,20 @@ def notes_from_input(inp):
     point_array = json.loads(inp)
     return [Note(p['x'], None, p['y'], i) for i, p, in enumerate(point_array)]
 
+PostingKey = namedtuple('PostingKey', ['pid', 'u', 'v'])
+
 def search(query):
     notes = notes_from_input(query)
-    (u, v), window = next(generate_normalized_windows_with_notes(notes, len(notes)))
-    m = {}
-    for n in window:
+    m = []
+    for (u, v), window in generate_normalized_windows_with_notes(notes, len(notes)):
         matches = {}
-        postings = plpy_execute("SELECT * FROM Posting WHERE n ~= %s", ("point",), ((n.onset, n.pitch),))
-        for posting in postings:
-            pid, u, v, j = posting["pid"], posting["u"], posting["v"], posting["nid"]
-            key = (pid, u, v)
-            matches[key] = matches.get(key, (u,)) + ((j, n.index + 1),)
-    raise Exception(matches)
-    return set((c[key]) for c in m for key in c if len(c[key]) >= 2)
+        for n in window:
+            postings = plpy_execute("SELECT * FROM Posting WHERE n ~= %s", ("point",), ((n.onset, n.pitch),))
+            for posting in postings:
+                pid, u, v, j = posting["pid"], posting["u"], posting["v"], posting["nid"]
+                key = PostingKey(pid, u, v)
+                matches[key] = matches.get(key, ((u, 0),)) + ((j, n.index),)
+        m.append(matches)
+    res = set((key.pid, c[key]) for c in m for key in c if len(c[key]) == len(notes))
+    pg_result = ([{"pid": k, "nids": [t[0] for t in v]} for k, v in res])
+    return pg_result
