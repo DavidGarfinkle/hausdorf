@@ -1,3 +1,4 @@
+import ast
 from collections import namedtuple
 from smrpy.piece import Piece, Note
 from smrpy.hausdorf import generate_normalized_windows_with_notes
@@ -44,12 +45,16 @@ def index_piece(pg_id, data):
 def notes_from_input(inp):
     import json
     point_array = json.loads(inp)
-    return [Note(p['x'], None, p['y'], i) for i, p, in enumerate(point_array)]
+    return [Note(p['x'], None, p['y'], i) for i, p in enumerate(point_array)]
+
+def notes_from_points(inp):
+    tuple_list = map(lambda string_tuple: ast.literal_eval(string_tuple), inp)
+    return [Note(p[0], None, p[1], i) for i, p in enumerate(tuple_list)]
 
 PostingKey = namedtuple('PostingKey', ['pid', 'u', 'v'])
 
 def search(query):
-    notes = notes_from_input(query)
+    notes = notes_from_points(query)
     m = []
     for (u, v), window in generate_normalized_windows_with_notes(notes, len(notes)):
         matches = {}
