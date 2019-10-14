@@ -1,7 +1,9 @@
 import ast
+import base64
 from collections import namedtuple
 from smrpy.piece import Piece, Note
 from smrpy.hausdorf import generate_normalized_windows_with_notes
+from smrpy.excerpt import coloured_excerpt
 
 try:
     import plpy
@@ -33,6 +35,7 @@ def index_piece(pg_id, data):
         VALUES (%s, %s, %s, %s, %s)
     """
     p = Piece(data)
+    plpy_execute("UPDATE Piece SET music21_xml=%s WHERE pid=%s", ("text", "integer"), (p.data, pg_id))
 
     for n in p.notes:
         plpy_execute(*(n.insert_str(pg_id)))
@@ -68,3 +71,9 @@ def search(query):
     res = set((key.pid, c[key]) for c in m for key in c if len(c[key]) == len(notes))
     pg_result = ([{"pid": k, "nids": [t[0] for t in v]} for k, v in res])
     return pg_result
+
+def excerpt(pid, nids):
+    symbolic_data_query = "SELECT music21_xml FROM Piece WHERE pid=%s"
+    symbolic_data, = plpy_execute(symbolic_data_query, ("integer",), (pid,))
+    return coloured_excerpt(symbolic_data['music21_xml'], nids)
+

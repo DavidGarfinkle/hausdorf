@@ -1,31 +1,29 @@
 import sys
+import os
 import music21
 import base64
 from smrpy import indexers
-from io import StringIO
 from dataclasses import dataclass
 
-def stream_to_xml(stream):
-  sx = music21.musicxml.m21ToXml.ScoreExporter(stream)
-  musicxml = sx.parse()
-  bfr = StringIO()
-  sys.stdout = bfr
-  sx.dump(musicxml)
-  output = bfr.getvalue()
-  sys.stdout = sys.__stdout__
-  return output
+def m21_score_to_xml_write(m21_score):
+    o = m21_score.write('xml')
+    with open(o, 'r') as f:
+        xml = f.read()
+    os.remove(o)
+    return xml
 
 @dataclass
 class Piece:
-  data: bytes
+  data: str
   name: str = ""
   fmt: str = ""
   collection_id: int = 0
 
   def __post_init__(self):
     stream = music21.converter.parse(base64.b64decode(self.data))
-    xml = stream_to_xml(stream)
-    self.data = bytes(xml, encoding="utf-8")
+    stream.makeNotation(inPlace=True)
+    xml = m21_score_to_xml_write(stream)
+    self.data = xml
     self.notes = [Note(n.offset, n.offset + n.duration.quarterLength, n.pitch.ps, i) for i, n in enumerate(indexers.NotePointSet(stream))]
   
   def insert_str(self):

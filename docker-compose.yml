@@ -10,7 +10,7 @@ services:
     volumes:
       - ./sql:/docker-entrypoint-initdb.d
       - ./postgres-data:/var/lib/postgresql/data
-      - ./py:/smrpy
+      - ./smrpy:/smrpy
   pgrst:
     image: postgrest/postgrest:latest
     environment:

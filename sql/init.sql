@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS Piece (
   pid SERIAL PRIMARY KEY,
   fmt TEXT,
-  data BYTEA,
+  symbolic_data TEXT,
+  music21_xml TEXT,
   name TEXT,
   collection_id INTEGER
 );
