@@ -1,6 +1,9 @@
 import ast
 import base64
+import music21
+import urllib.parse
 from collections import namedtuple
+from smrpy.indexers import NotePointSet
 from smrpy.piece import Piece, Note
 from smrpy.hausdorf import generate_normalized_windows_with_notes
 from smrpy.excerpt import coloured_excerpt
@@ -41,7 +44,7 @@ def index_piece(pg_id, data):
         plpy_execute(*(n.insert_str(pg_id)))
 
     for (u, v), normalized_window in generate_normalized_windows_with_notes(p.notes, 10):
-        for i, n in enumerate(normalized_window[1:], 1):
+        for i, n in enumerate(normalized_window):
             plpy_execute(posting_query, ("point", "integer", "integer", "integer", "integer"),
                 ((n.onset, n.pitch), pg_id, u.index, v.index, n.index))
 
@@ -56,21 +59,53 @@ def notes_from_points(inp):
 
 PostingKey = namedtuple('PostingKey', ['pid', 'u', 'v'])
 
+"""
+WITH
+pattern_notes AS (SELECT unnest('{"(0,0)","(0,4)","(0,9)","(0,12)","(1,-2)","(1,5)","(1,10)","(1,14)"}'::POINT[]) AS n),
+postings AS (
+        SELECT Note.n, Note.pid, Note.nid, Posting.u, Posting.v
+        FROM Posting JOIN Note ON Note.pid = Posting.pid AND Note.nid = Posting.nid
+        JOIN pattern_notes ON Posting.n ~= pattern_notes.n
+        ORDER BY (Note.pid, Posting.u, Posting.v, Note.nid) ASC)
+SELECT DISTINCT ON (nids) array_agg(postings.n) AS notes, postings.pid, array_agg(postings.nid) AS nids, postings.u, postings.v
+FROM postings
+GROUP BY (postings.pid, postings.u, postings.v)
+HAVING COUNT(postings.n) = 7;
+"""
+
+"""
 def search(query):
     notes = notes_from_points(query)
     m = []
     for (u, v), window in generate_normalized_windows_with_notes(notes, len(notes)):
         matches = {}
-        for n in window:
-            postings = plpy_execute("SELECT * FROM Posting WHERE n ~= %s", ("point",), ((n.onset, n.pitch),))
+        for pattern_note in window:
+            postings = plpy_execute("
+                SELECT Note.n WHERE Note.nid = Posting.u
+                SELECT Note.n, Note.pid, Note.nid, Posting.u, Posting.v
+                FROM Posting JOIN Note ON Note.pid = Posting.pid AND Note.nid = Posting.nid
+                WHERE Posting.n ~= %s",
+                ("point",), ((pattern_note.onset, pattern_note.pitch),))
             for posting in postings:
-                pid, u, v, j = posting["pid"], posting["u"], posting["v"], posting["nid"]
+                original_note, pid, nid, u, v = posting["n"], posting["pid"], posting["nid"], posting["u"], posting["v"]
                 key = PostingKey(pid, u, v)
-                matches[key] = matches.get(key, ((u, 0),)) + ((j, n.index),)
+                matches[key] = matches.get(key, ((u, 0),)) + ((nid, original_note, pattern_note.index),)
         m.append(matches)
     res = set((key.pid, c[key]) for c in m for key in c if len(c[key]) == len(notes))
-    pg_result = ([{"pid": k, "nids": [t[0] for t in v]} for k, v in res])
-    return pg_result
+    pg_results = ([{"pid": k, "nids": [t[0] for t in v], "notes": [t[1] for t in v]} for k, v in res])
+    return pg_results
+"""
+
+def search(query):
+    #stream = music21.converter.parse(query)
+    #points = [(x.onset, x.pitch.ps) for x in NotePointSet(query)]
+    notes = notes_from_points(query)
+    m = []
+    for (u, v), window in generate_normalized_windows_with_notes(notes, len(notes)):
+        ps = [(n.onset, n.pitch) for n in window]
+        results = plpy_execute("SELECT * FROM search_sql('{" + ','.join(f'"({x[0]},{x[1]})"' for x in ps) + "}')", (), ())
+        m.extend(results)
+    return m
 
 def excerpt(pid, nids):
     symbolic_data_query = "SELECT music21_xml FROM Piece WHERE pid=%s"

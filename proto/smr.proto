@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package proto;
+
+service Smr {
+    rpc Search (SearchRequest) returns (SearchResponse);
+    rpc AddPiece (AddPieceRequest) returns (AddPieceResponse);
+    rpc GetPieceIds (GetPieceIdsRequest) returns (GetPieceIdsResponse);
+}
+
+message AddPieceRequest {
+	uint32 pid = 1;
+	repeated Note notes = 2;
+}
+message AddPieceResponse {}
+
+message GetPieceIdsRequest {}
+message GetPieceIdsResponse {
+	repeated uint32 pids = 1;
+}
+
+message SearchRequest {
+	repeated Note notes = 1;	
+    repeated uint32 pids = 2;
+}
+message SearchResponse {
+	repeated Occurrence occurrences = 1;
+}
+
+message Note {
+		float onset = 1;
+		float offset = 2;
+		int32 pitch = 3;
+		uint32 piece_idx = 4;
+}
+
+message Occurrence {
+	uint32 pid = 1;
+	repeated Note notes = 2;
+}

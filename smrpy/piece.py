@@ -3,6 +3,7 @@ import os
 import music21
 import base64
 from smrpy import indexers
+from smrpy import smr_pb2
 from dataclasses import dataclass
 
 def m21_score_to_xml_write(m21_score):
@@ -44,7 +45,7 @@ class Piece:
 
 @dataclass
 class Note:
-    onset: int
+    onset: float
     duration: int
     pitch: int
     index: int
@@ -59,3 +60,6 @@ class Note:
         """,
         ("point", "integer", "integer"),
         ((self.onset, self.pitch), pid, self.index))
+
+    def to_pb(self):
+        return smr_pb2.Note(onset=self.onset, offset=None, pitch=int(self.pitch), piece_idx=self.index)

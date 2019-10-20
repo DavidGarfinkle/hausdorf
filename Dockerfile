@@ -8,6 +8,6 @@ RUN pip3 install numpy
 RUN pip3 install pandas
 RUN pip3 install music21
 
-ADD py /smrpy
+ADD smrpy /smrpy
 ENV PYTHONPATH=/
 RUN pip3 install -r /smrpy/requirements.txt
