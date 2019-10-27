@@ -1,14 +1,28 @@
 import sys
 import base64
 from io import StringIO
-import music21
-from smrpy import indexers
 
-def coloured_excerpt(symbolic_data, note_list):
+import music21
+from smrpy.indexers import NotePointSet
+
+def coloured_excerpt(db_conn, note_list, piece_id):
     note_list = [int(i) for i in note_list]
 
-    score = music21.converter.parse(symbolic_data)
-    nps = list(indexers.NotePointSet(score))
+    with db_conn, db_conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT symbolic_data
+            FROM Piece
+            WHERE pid={piece_id}
+            ;
+            """)
+        results = cur.fetchall()
+        if not results:
+            raise Exception(f"excerpts: no data found for piece {piece_id}!")
+
+    score = music21.converter.parse(base64.b64decode(results[0][0]))
+    score.makeNotation(inPlace=True)
+
+    nps = list(NotePointSet(score))
     nps_ids = [nps[i].original_note_id for i in note_list]
 
     # Get stream excerpt

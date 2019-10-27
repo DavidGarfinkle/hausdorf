@@ -3,35 +3,32 @@ import json
 import math
 import os
 from functools import partial
-from flask import url_for
-from smrpy.excerpt import coloured_excerpt
+from flask import url_for, request
+from dataclasses import dataclass, fields, asdict
 
-def build_response(occs, rpp, page, tnps, intervening, query, inexact):
-    if rpp > 0:
-        num_pages = int(len(occs) / rpp) + 1
-    else:
-        num_pages = 0
-    paginator_range = calculate_page_range(page, num_pages)
+@dataclass
+class QueryArgs:
+    rpp: int
+    page: int
+    tnps: tuple
+    intervening: tuple
+    inexact: int
+    collection: int
+    query: str
 
-    pagelink = partial(url_for, endpoint="search", inexact=inexact, query=query, rpp=rpp, tnps=tnps, intervening=intervening)
+def build_response(db_conn, occs, qargs):
+    pagination = Pagination(len(occs), qargs)
+    pagination.pages = [
+            [pb_occ_to_json(db_conn, o, get_excerpt = (i == qargs.page)) for o in occs[qargs.rpp * i : qargs.rpp * (i + 1)]]
+            for i in range(pagination.numPages)]
     return {
-        'paginatorLinks': [pagelink(page=i) for i in paginator_range],
-        'previousPageLink': pagelink(page=max(0, page-1)),
-        'nextPageLink': pagelink(page=min(num_pages, page+1)),
-        'firstPage': pagelink(page=0),
-        'lastPage': pagelink(page=(num_pages-1)),
-        'paginatorRange': paginator_range,
-        'totalCount': len(occs),
-        'pagesCount': num_pages,
-        'query': query,
-        'rpp': rpp,
-        'curPage': page,
-        'pages': [
-            [pb_occ_to_json(o, get_excerpt = (i == page)) for o in occs[rpp * i : rpp * (i + 1)]]
-            for i in range(num_pages)]
-    }
+            "query": qargs.query,
+            "pagination": asdict(pagination),
+            "numPages": pagination.numPages,
+            "range": pagination.range
+            }
 
-def pb_occ_to_json(pb_occ, get_excerpt):
+def pb_occ_to_json(db_conn, pb_occ, get_excerpt):
 
     excerptIndices = [n.piece_idx for n in pb_occ.notes]
     pid = str(pb_occ.pid)
@@ -43,8 +40,17 @@ def pb_occ_to_json(pb_occ, get_excerpt):
         "excerptUrl": url_for("excerpt", pid=pid, nid=",".join(str(x) for x in excerptIndices))
     }
 
-    resp["name"] = "no name info"
+    with db_conn, db_conn.cursor() as cur:
+        cur.execute(f"SELECT name FROM Piece WHERE pid={pb_occ.pid}")
+        if cur.rowcount == 0:
+            raise DatabasesOutOfSyncError(f"pid {pb_occ.pid} does not exist in the flask database")
+        name = cur.fetchone()
+        if name and name[0]:
+            resp["name"] = " ".join(os.path.basename(name[0]).split("_")[1:])
+        else:
+            resp["name"] = "no name info"
 
+    """
     if get_excerpt:
         try:
             raise Exception("skipping server-side rendering")
@@ -57,22 +63,44 @@ def pb_occ_to_json(pb_occ, get_excerpt):
             resp["excerptSkipped"] = False
     else:
         b64_xml = ""
+    """
+    b64_xml = ""
 
     resp["xmlBase64"] = b64_xml
 
     return resp
 
-def calculate_page_range(cur, total):
-    """
-    page_nums = range(num)
-    if total - cur < num / 2:
-        page_nums = map(lambda x: x + total - num, page_nums)
-    elif cur > num / 2:
-        page_nums = map(lambda x: x + cur, page_nums)
-    """
-    if cur == 0 or cur == 1:
-        return list(range(3))
-    elif total - cur < 3:
-        return list(range(cur, total))
-    else:
-        return [cur-1, cur, cur+1]
+@dataclass
+class Pagination:
+    numOccs: list
+    queryArgs: QueryArgs
+
+    range: tuple = ()
+    cur: int = 0
+    numPages = 0
+    previousLink: str = ""
+    nextLink: str = ""
+    firstLink: str = ""
+    lastLink: str = ""
+    links: tuple = ()
+    pages: tuple = ()
+
+    def __post_init__(self):
+        if self.queryArgs.rpp > 0:
+            self.numPages = int(self.numOccs / self.queryArgs.rpp) + 1
+        else:
+            self.numPages = 0
+
+        self.range = calculate_page_range(self.queryArgs.page, self.numPages, 3)
+        self.cur = self.queryArgs.page
+
+        pagelink = partial(url_for, endpoint="search", **{param: request.args.get(param) for param in (x.name for x in fields(QueryArgs))})
+        self.links = [pagelink(page=i) for i in self.range]
+        self.previousLink = pagelink(page = self.cur - 1) if self.cur > 0 else None
+        self.nextLink = pagelink(page=min(self.numPages, self.cur+1)),
+        self.firstLink = pagelink(page=0)
+        self.lastLink = pagelink(page=(self.numPages - 1)) if self.numPages > 0 else 0
+
+def calculate_page_range(cur, total, numrange):
+    page_nums = range(min(numrange, total))
+    return tuple(map(lambda x: x + min(total - len(page_nums) + 1, cur), page_nums))

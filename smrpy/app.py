@@ -6,13 +6,41 @@ from smrpy import occurrence, piece
 from smrpy import indexers
 import requests
 import json
+from dataclasses import fields
 
-from response import build_response
+import psycopg2
+import time
+
+from smrpy.response import build_response, QueryArgs
+from smrpy.excerpt import coloured_excerpt
 
 application = Flask(__name__)
 logger = application.logger
 
-POSTGREST_URI = "http://localhost:3000/"
+POSTGREST_URI = "http://localhost:3000"
+
+def connect_to_psql():
+    db_str = ' '.join('='.join((k, os.environ[v])) for k, v in (
+                ('host', 'PG_HOST'),
+                ('port', 'PG_PORT'),
+                ('dbname', 'PG_DB'),
+                ('user', 'PG_USER'),
+                ('password', 'PG_PASS')))
+    print("connecting to " + db_str)
+
+    while True:
+        try:
+            conn = psycopg2.connect(db_str)
+            break
+        except Exception as e:
+            time_to_wait = 5
+            print(f"failed; waiting {time_to_wait} seconds...")
+            time.sleep(time_to_wait)
+            connect_to_psql()
+    conn.autocommit = False
+
+    application.config['PSQL_CONN'] = conn
+    return conn
 
 @application.route("/", methods=["GET"])
 def index():
@@ -26,25 +54,24 @@ def get_dist(path):
 def index_no_oarg():
     return index(None)
 
-def apiSearch(note_tuples):
-    #p=\{\"(0,60)\",\"(0,64)\",\"(0,69)\",\"(0,72)\",\"(1,58)\",\"(1,65)\",\"(1,70)\",\"(1,74)\"\}"
-    query_param = "{" + ",".join(f'"{tup}"' for up in note_tuples) + "}"
-    return requests.get("localhost:3000/search", p = query_param)
-
 def qstring(ps):
-    return "{" + ','.join(f'\"({x[0]},{x[1]})\"' for x in ps) + "}"
+    return "{" + ','.join(f'\"({x.onset},{x.pitch})\"' for x in ps) + "}"
 
 @application.route("/excerpt", methods=["GET"])
 def excerpt():
+    db_conn = connect_to_psql()
     piece_id = int(request.args.get("pid"))
     notes = [str(x) for x in request.args.get("nid").split(",")]
+    #excerpt_xml = coloured_excerpt(db_conn, notes, piece_id)
     excerpt_xml = requests.get("http://localhost:3000/rpc/excerpt", {"pid": piece_id, "nids": '{' + ','.join(notes) + '}'}).content
+    print(excerpt_xml)
     return Response(excerpt_xml, mimetype='text/xml')
 
 @application.route("/search", methods=["GET"])
 def search():
+    db_conn = connect_to_psql()
 
-    for arg in ("page", "rpp", "query", "tnps", "intervening", "inexact", "collection"):
+    for arg in (x.name for x in fields(QueryArgs)):
         missing = []
         if not request.args.get(arg):
             missing.append(arg)
@@ -62,6 +89,8 @@ def search():
         inexact = request.args.get("inexact").split(",")
         inexact_ints = tuple(map(int, inexact))
         collection = int(request.args.get("collection"))
+        query_str = request.args.get("query")
+        qargs = QueryArgs(rpp, page, tnps, intervening, inexact, collection, query_str)
     except ValueError as e:
         return Response(f"Failed to parse parameter(s) to integer, got exception {str(e)}", status=400)
 
@@ -70,8 +99,7 @@ def search():
     query_nps = indexers.NotePointSet(query_stream)
     query_notes = [(n.offset, n.pitch.ps) for n in query_nps]
     query_pb_notes = [piece.Note(n[0], None, n[1], i).to_pb() for i, n in enumerate(query_notes)]
-    #resp = requests.get(POSTGREST_URI + "rpc/search", { "p": qstring(query_points) }).json()
-    resp = requests.get("http://localhost:3000/rpc/search", params='query={\"(0.0,60.0)\",\"(0.0,64.0)\",\"(0.0,69.0)\",\"(0.0,72.0)\",\"(1.0,58.0)\",\"(1.0,65.0)\",\"(1.0,70.0)\",\"(1.0,74.0)\"}').json()
+    resp = requests.get(POSTGREST_URI + "/rpc/search", params=('query=' + qstring(query_pb_notes))).json()
     occurrences = [occurrence.occ_to_occpb(occ) for occ in resp]
 
     occfilters = OccurrenceFilters(
@@ -80,13 +108,9 @@ def search():
             inexact = inexact_ints)
 
     search_response = build_response(
+            db_conn,
             filter_occurrences(occurrences, query_pb_notes, occfilters),
-            rpp,
-            page,
-            tnps,
-            intervening,
-            query_str,
-            inexact)
+            qargs)
 
     if request.content_type == "application/json":
         return jsonify(search_response)

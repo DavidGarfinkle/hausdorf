@@ -61,5 +61,5 @@ class Note:
         ("point", "integer", "integer"),
         ((self.onset, self.pitch), pid, self.index))
 
-    def to_pb(self):
-        return smr_pb2.Note(onset=self.onset, offset=None, pitch=int(self.pitch), piece_idx=self.index)
+    def to_pb(self, piece_idx = None):
+        return smr_pb2.Note(onset=self.onset, offset=None, pitch=int(self.pitch), piece_idx = piece_idx if piece_idx else self.index)

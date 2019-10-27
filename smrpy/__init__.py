@@ -103,8 +103,11 @@ def search(query):
     m = []
     for (u, v), window in generate_normalized_windows_with_notes(notes, len(notes)):
         ps = [(n.onset, n.pitch) for n in window]
-        results = plpy_execute("SELECT * FROM search_sql('{" + ','.join(f'"({x[0]},{x[1]})"' for x in ps) + "}')", (), ())
-        m.extend(results)
+        query_string = "SELECT * FROM search_sql('{" + ",".join(f'"({x[0]},{x[1]})"' for x in ps) + "}')"
+        results = plpy_execute(query_string, (), ())
+        for r in results:
+            if tuple(r['nids']) not in (tuple(x['nids']) for x in m):
+                m.extend(results)
     return m
 
 def excerpt(pid, nids):
