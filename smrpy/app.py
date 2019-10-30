@@ -62,9 +62,8 @@ def excerpt():
     db_conn = connect_to_psql()
     piece_id = int(request.args.get("pid"))
     notes = [str(x) for x in request.args.get("nid").split(",")]
-    #excerpt_xml = coloured_excerpt(db_conn, notes, piece_id)
-    excerpt_xml = requests.get("http://localhost:3000/rpc/excerpt", {"pid": piece_id, "nids": '{' + ','.join(notes) + '}'}).content
-    print(excerpt_xml)
+    excerpt_xml = coloured_excerpt(db_conn, notes, piece_id)
+    #excerpt_xml = requests.get("http://localhost:3000/rpc/excerpt", {"pid": piece_id, "nids": '{' + ','.join(notes) + '}'}).content
     return Response(excerpt_xml, mimetype='text/xml')
 
 @application.route("/search", methods=["GET"])
