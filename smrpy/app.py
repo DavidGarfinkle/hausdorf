@@ -50,6 +50,10 @@ def index():
 def get_dist(path):
     return send_from_directory('templates', path)
 
+@application.route("/favicon.ico", methods=["GET"])
+def favicon():
+    return send_from_directory('templates', 'favicon.ico')
+
 @application.route("/index", methods=["POST"])
 def index_no_oarg():
     return index(None)
