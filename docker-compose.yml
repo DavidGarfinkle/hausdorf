@@ -23,7 +23,9 @@ services:
       - "3000:3000"
   nginx:
     image: nginx:latest
+    depends_on:
+      - "pgrst"
     volumes:
-      - ./conf/nginx.conf:/etc/nginx/conf.d/cbsmr.conf
+      - ./conf/nginx.docker-compose:/etc/nginx/conf.d/cbsmr.conf
     ports:
       - "80:80"
