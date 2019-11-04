@@ -27,5 +27,23 @@ services:
       - "pgrst"
     volumes:
       - ./conf/nginx.docker-compose:/etc/nginx/conf.d/cbsmr.conf
+      - ./smrpy/socket:/cbsmr/flask/socket
     ports:
       - "80:80"
+  flask:
+    build:
+        context: .
+        dockerfile: flask.dockerfile
+    environment:
+      - PG_HOST=db
+      - PG_PORT=5432
+      - PG_USER=postgres
+      - PG_PASS=postgres
+      - PG_DB=postgres
+    volumes:
+      - ./smrpy/socket:/cbsmr/flask/socket
+    depends_on:
+      - "pgrst"
+      - "db"
+      - "nginx"
+
