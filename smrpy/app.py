@@ -17,15 +17,15 @@ from smrpy.excerpt import coloured_excerpt
 application = Flask(__name__)
 logger = application.logger
 
-POSTGREST_URI = "http://localhost:3000"
+POSTGREST_URI = os.environ.get("POSTGREST_URI", "http://localhost:3000")
 
 def connect_to_psql():
-    db_str = ' '.join('='.join((k, os.environ[v])) for k, v in (
-                ('host', 'PG_HOST'),
-                ('port', 'PG_PORT'),
-                ('dbname', 'PG_DB'),
-                ('user', 'PG_USER'),
-                ('password', 'PG_PASS')))
+    db_str = ' '.join(('='.join((k, os.environ[v])) if v in os.environ else "") for k, v in (
+                ('host', 'PGHOST'),
+                ('port', 'PGPORT'),
+                ('dbname', 'PGDATABASE'),
+                ('user', 'PGUSER'),
+                ('password', 'PG_PASS'))) # TODO fix this line to match (and not go to stdout)?
     print("connecting to " + db_str)
 
     while True:

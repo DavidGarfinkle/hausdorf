@@ -226,7 +226,7 @@ function initFilters() {
 }
 
 
-(() => {
+$(() => {
 	newAceEditor();
     initFilters();
 	setSearchForm(5, 0);
@@ -235,4 +235,4 @@ function initFilters() {
 	if (Object.values(searchResponse).length !== 0)  {
 		ProcessResponse(searchResponse)
 	}
-})();
+});
