@@ -17,15 +17,15 @@ from smrpy.excerpt import coloured_excerpt
 application = Flask(__name__)
 logger = application.logger
 
-POSTGREST_URI = "http://localhost:3000"
+POSTGREST_URI = os.environ.get("POSTGREST_URI", "http://localhost:3000")
 
 def connect_to_psql():
-    db_str = ' '.join('='.join((k, os.environ[v])) for k, v in (
-                ('host', 'PG_HOST'),
-                ('port', 'PG_PORT'),
-                ('dbname', 'PG_DB'),
-                ('user', 'PG_USER'),
-                ('password', 'PG_PASS')))
+    db_str = ' '.join(('='.join((k, os.environ[v])) if v in os.environ else "") for k, v in (
+                ('host', 'PGHOST'),
+                ('port', 'PGPORT'),
+                ('dbname', 'PGDATABASE'),
+                ('user', 'PGUSER'),
+                ('password', 'PG_PASS'))) # TODO fix this line to match (and not go to stdout)?
     print("connecting to " + db_str)
 
     while True:
@@ -67,7 +67,7 @@ def excerpt():
     piece_id = int(request.args.get("pid"))
     notes = [str(x) for x in request.args.get("nid").split(",")]
     excerpt_xml = coloured_excerpt(db_conn, notes, piece_id)
-    #excerpt_xml = requests.get("http://localhost:3000/rpc/excerpt", {"pid": piece_id, "nids": '{' + ','.join(notes) + '}'}).content
+    #excerpt_xml = requests.get(f"{POSTGREST_URI}/rpc/excerpt", {"pid": piece_id, "nids": '{' + ','.join(notes) + '}'}).content
     return Response(excerpt_xml, mimetype='text/xml')
 
 @application.route("/search", methods=["GET"])
@@ -102,7 +102,7 @@ def search():
     query_nps = indexers.NotePointSet(query_stream)
     query_notes = [(n.offset, n.pitch.ps) for n in query_nps]
     query_pb_notes = [piece.Note(n[0], None, n[1], i).to_pb() for i, n in enumerate(query_notes)]
-    resp = requests.get(POSTGREST_URI + "/rpc/search", params=('query=' + qstring(query_pb_notes))).json()
+    resp = requests.get(f"{POSTGREST_URI}/rpc/search", params=('query=' + qstring(query_pb_notes))).json()
     occurrences = [occurrence.occ_to_occpb(occ) for occ in resp]
 
     occfilters = OccurrenceFilters(
