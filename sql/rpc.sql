@@ -35,3 +35,24 @@ CREATE OR REPLACE FUNCTION excerpt(pid INTEGER, nids INTEGER[]) RETURNS TEXT AS 
     from smrpy import excerpt
     return excerpt(pid, nids)
 $$ LANGUAGE plpython3u IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION search(normalized_query POINT[], min_window_matches INTEGER) 
+RETURNS 
+TABLE(pid INTEGER, notes POINT[]) AS $$
+    WITH matching_windows as (
+		SELECT pid, u, v, normalized, unnormalized
+		FROM notewindow
+		WHERE (normalized && normalized_query)
+	)
+	,pattern_notes AS (SELECT ARRAY[unnest(normalized_query)::POINT] AS n)
+	,window_note_matches AS (
+		SELECT w.pid, u, v,
+		w.unnormalized[array_position(w.normalized, pattern_notes.n[1])] AS note
+		from pattern_notes join matching_windows AS W
+		ON pattern_notes.n <@ w.normalized
+	)
+	SELECT pid, array_agg(note) notes
+	FROM window_note_matches
+	GROUP BY (pid, u, v)
+	HAVING array_length(array_agg(note), 1) > min_window_matches
+$$ LANGUAGE SQL;
