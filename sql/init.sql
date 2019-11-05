@@ -35,3 +35,5 @@ CREATE TABLE IF NOT EXISTS Posting (
   FOREIGN KEY (pid, nid) REFERENCES Note(pid, nid)
   --FOREIGN KEY (pid, u, v) REFERENCES NormalizedWindow(pid, u, v)
 );
+
+create index idx_gin_windows on notewindow using GIN(normalized);
