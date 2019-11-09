@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS Piece (
   fmt TEXT,
   symbolic_data TEXT,
   music21_xml TEXT,
+  composer TEXT,
   name TEXT,
   collection_id INTEGER
 );
@@ -14,10 +15,11 @@ CREATE TABLE IF NOT EXISTS Note (
   PRIMARY KEY (pid, nid)
 );
 
-CREATE TABLE IF NOT EXISTS NormalizedWindow (
+CREATE TABLE IF NOT EXISTS NoteWindow (
   u INTEGER,
   v INTEGER,
   normalized POINT[],
+  unnormalized POINT[],
   pid INTEGER REFERENCES Piece(pid),
   len INTEGER,
   FOREIGN KEY (pid, u) REFERENCES Note(pid, nid),

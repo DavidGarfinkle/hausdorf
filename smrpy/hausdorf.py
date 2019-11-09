@@ -173,7 +173,7 @@ def generate_normalized_windows(stream, window_size):
         window = notes[i:i+window_size]
         bases = [(window[0], window[i]) for i in range(1, len(window))]
         for u, v in ((u, v) for u, v in bases if u.onset != v.onset):
-            yield (u,v), normalize(window, (u,v))
+            yield (u,v), normalize(window, (u,v)), window
 
 def generate_normalized_windows_with_notes(notes, window_size):
     
@@ -181,7 +181,7 @@ def generate_normalized_windows_with_notes(notes, window_size):
         window = notes[i:i+window_size]
         bases = [(window[0], window[i]) for i in range(1, len(window))]
         for u, v in ((u, v) for u, v in bases if u.onset != v.onset):
-            yield (u,v), normalize(window, (u,v))
+            yield (u,v), normalize(window, (u,v)), window
 
 def parse_filename(path):
   fmt = path[-3:]

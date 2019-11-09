@@ -4,7 +4,7 @@ services:
   db:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: db.dockerfile
     ports:
       - "5432:5432"
     volumes:
@@ -27,9 +27,10 @@ services:
       - "pgrst"
     volumes:
       - ./conf/nginx.docker-compose:/etc/nginx/conf.d/cbsmr.conf
-      - ./smrpy/socket:/cbsmr/flask/socket
+      - ./smrpy/socket:/cbsmr/smrpy/socket
     ports:
       - "80:80"
+      - "8000:8000"
   flask:
     build:
         context: .
@@ -41,9 +42,8 @@ services:
       - PG_PASS=postgres
       - PG_DB=postgres
     volumes:
-      - ./smrpy/socket:/cbsmr/flask/socket
+      - ./smrpy/socket:/cbsmr/smrpy/socket
     depends_on:
       - "pgrst"
       - "db"
       - "nginx"
-

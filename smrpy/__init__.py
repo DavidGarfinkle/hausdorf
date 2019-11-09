@@ -43,7 +43,11 @@ def index_piece(pg_id, data):
     for n in p.notes:
         plpy_execute(*(n.insert_str(pg_id)))
 
-    for (u, v), normalized_window in generate_normalized_windows_with_notes(p.notes, 10):
+    for (u, v), normalized_window, window in generate_normalized_windows_with_notes(p.notes, 10):
+        plpy_execute(
+                "INSERT INTO NoteWindow(pid, u, v, normalized, unnormalized) VALUES (%s, %s, %s, %s, %s)",
+                ("integer", "integer", "integer", "point[]", "point[]"),
+                (pg_id, u.index, v.index, [(n.onset, n.pitch) for n in normalized_window], [(n.onset, n.pitch) for n in window]))
         for i, n in enumerate(normalized_window):
             plpy_execute(posting_query, ("point", "integer", "integer", "integer", "integer"),
                 ((n.onset, n.pitch), pg_id, u.index, v.index, n.index))
@@ -101,7 +105,7 @@ def search(query):
     #points = [(x.onset, x.pitch.ps) for x in NotePointSet(query)]
     notes = notes_from_points(query)
     m = []
-    for (u, v), window in generate_normalized_windows_with_notes(notes, len(notes)):
+    for (u, v), window, _ in generate_normalized_windows_with_notes(notes, len(notes)):
         ps = [(n.onset, n.pitch) for n in window]
         query_string = "SELECT * FROM search_sql('{" + ",".join(f'"({x[0]},{x[1]})"' for x in ps) + "}')"
         results = plpy_execute(query_string, (), ())
