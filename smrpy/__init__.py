@@ -33,6 +33,7 @@ def plpy_execute(query, types, values):
     return plpy.execute(plan, values)
 
 def index_piece(pg_id, data):
+    # todo make this a transaction
     posting_query = """
         INSERT INTO Posting (n, pid, u, v, nid)
         VALUES (%s, %s, %s, %s, %s)

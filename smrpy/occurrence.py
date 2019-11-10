@@ -17,8 +17,8 @@ def filter_occurrences(occurrences, query_pb_notes, requested_filters):
         filter_by_num_notes(query_pb_notes, occ, requested_filters.inexact),
         ))]
 
-def filter_by_transposition(query_pb_notes, pb_occ, allowed_transpositions):
-    actual = (query_pb_notes[0].pitch - pb_occ.notes[0].pitch) % 12
+def filter_by_transposition(query_notes, occ, allowed_transpositions):
+    actual = (query_notes[0].pitch - occ.notes[0].pitch) % 12
     return actual in allowed_transpositions
 
 def filter_by_intervening(pb_occ, intervening):

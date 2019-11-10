@@ -1,11 +1,14 @@
 #!/usr/local/bin/python3
 import os
+import music21
 from flask import Flask, request, jsonify, Response, send_from_directory, render_template
 from smrpy.occurrence import filter_occurrences, OccurrenceFilters
+from smrpy.hausdorf import generate_normalized_windows_with_notes
 from smrpy import occurrence, piece
 from smrpy import indexers
 import requests
 import json
+from binascii import unhexlify
 from dataclasses import fields
 
 import psycopg2
@@ -57,6 +60,95 @@ def favicon():
 @application.route("/index", methods=["POST"])
 def index_no_oarg():
     return index(None)
+
+@application.route("/index/<piece_id>", methods=["POST"])
+def index_with_arg(piece_id):
+    try:
+        piece_id = int(piece_id)
+    except ValueError as e:
+        return Response(f"POST /index/<piece_id> requires an integer argument; tried parsing, failed with {str(e)}", status=400)
+    return index(piece_id)
+
+def index(piece_id):
+    """
+    Indexes a piece and stores it at :param id
+    """
+    db_conn = connect_to_psql()
+
+    symbolic_data = None
+    metadata = {
+        "pid": None,
+        "fmt": None,
+        "filename": None,
+        "collection": None
+    }
+
+    # :ref https://werkzeug.palletsprojects.com/en/0.14.x/request_data/#how-does-it-parse
+    if request.content_type == "multipart/form-data":
+        # :todo can't get this working. request.files and request.forms is always empty
+        # :ref https://github.com/psf/requests/issues/2505
+        # :ref https://github.com/pallets/flask/issues/1384
+        # :ref https://github.com/psf/requests/issues/2883
+        # :ref https://github.com/psf/requests/issues/2313
+        return Response("TODO; Content-Type: multipart/form-data is unsupported", status=415)
+
+        # `request.files` will be a MultiDict object
+        # :ref https://werkzeug.palletsprojects.com/en/0.15.x/datastructures/#werkzeug.datastructures.MultiDict
+
+        """
+        files = list(request.files.items())
+        if len(files) != 1:
+            return Response(
+                    "POST /index/<piece_id> accepts exactly file at a time "
+                    f"but received a multipart/form-data POST with {len(files)} files", status=415)
+        else:
+            symbolic_data = files[0].read()
+            metadata["filename"] = request.form.get("filename", None)
+            metadata["collection"] = request.form.get("collection", None)
+        """
+
+    elif request.content_type == "application/x-www-form-urlencoded":
+        return Response("TODO; Content-Type: application/x-www-form-urlencoded is unsupported", status=415)
+    elif request.content_type == "application/octet-stream":
+        # Random 16-byte string
+        SEPARATOR = unhexlify("90dc2e88fb6b4777432355a4bc7348fd17872e78905a7ec6626fe7b0f10a2e5a")
+        try:
+            metadata_bytes, symbolic_data = request.data.split(SEPARATOR)
+        except ValueError:
+            return Response(f"Request is malformed. It must have exactly one occurrence of the following byte string separating the JSON metadata and piece data, and this separator cannot be contained in the data itself: {SEPARATOR}")
+        metadata_req = json.loads(metadata_bytes.decode("utf-8"))
+        metadata.update(metadata_req)
+    else:
+        return Response(f"Unsupported Content-Type: {request.content_type}", 415)
+    if not symbolic_data:
+        return Response("Failed to find piece data in POST request body", status=400)
+
+    try:
+        p = piece.Piece(symbolic_data, pid=piece_id)
+    except music21.Music21Exception as e:
+        return Response(f"failed to parse symbolic data with music21: {str(e)}", status=415)
+
+    logger.info(f"POST /index/<piece_id>: inserting piece of size {len(symbolic_data)} bytes, with metadata {metadata}")
+
+    with db_conn, db_conn.cursor() as cur:
+        query, _, values = p.insert_str()
+        cur.execute(query, values)
+        piece_id, = cur.fetchone()
+
+        for n in p.notes:
+            query, _, values = n.insert_str(piece_id)
+            cur.execute(query, values)
+
+        for (u, v), normalized_window, window in generate_normalized_windows_with_notes(p.notes, 10):
+            point_array = "'{" + ','.join(('"(%s, %s)"',) * len(window)) + "}'"
+            query = f"INSERT INTO NoteWindow(pid, u, v, normalized, unnormalized) VALUES (%s, %s, %s, {point_array}, {point_array})"
+            values = [piece_id, u.index, v.index] + [x for n in normalized_window for x in (n.onset, n.pitch)] + [x for n in window for x in (n.onset, n.pitch)]
+            cur.execute(query, values)
+            for i, n in enumerate(normalized_window):
+                cur.execute("INSERT INTO Posting (n, pid, u, v, nid) VALUES ('(%s, %s)', %s, %s, %s, %s)",
+                            (n.onset, n.pitch, piece_id, u.index, v.index, n.index))
+
+    return Response(str(piece_id), mimetype='text/plain')
 
 def qstring(ps):
     return "{" + ','.join(f'\"({x.onset},{x.pitch})\"' for x in ps) + "}"
