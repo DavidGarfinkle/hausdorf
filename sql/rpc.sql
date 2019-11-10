@@ -21,15 +21,31 @@ CREATE OR REPLACE FUNCTION search_sql(normalized_query POINT[]) RETURNS TABLE(pi
     postings AS (
             SELECT Note.n, Note.pid, Note.nid, Posting.u, Posting.v
             FROM Posting JOIN Note ON Note.pid = Posting.pid AND Note.nid = Posting.nid
-            JOIN pattern_notes ON Posting.n ~= pattern_notes.n
-            ORDER BY (Note.pid, Posting.u, Posting.v, Note.nid) ASC),
+            JOIN pattern_notes ON Posting.n ~= pattern_notes.n),
     occs_by_window AS (
-        SELECT DISTINCT ON (nids) postings.pid, array_agg(postings.nid) AS nids, array_agg(postings.n) AS notes, postings.u, postings.v
+        SELECT postings.pid, array_agg(postings.n) AS notes, postings.u, postings.v
         FROM postings
         GROUP BY (postings.pid, postings.u, postings.v))
     SELECT occs_by_window.pid, occs_by_window.notes
     FROM occs_by_window;
 $$ LANGUAGE SQL;
+
+CREATE OR REPLACE FUNCTION search_sql_gin_exact(normalized_query POINT[]) RETURNS TABLE(pid INTEGER, notes POINT[]) AS
+$$
+WITH matching_windows AS (
+        SELECT pid, u, v, normalized, unnormalized
+        FROM notewindow
+        WHERE (normalized @> normalized_query)),
+    window_note_matches AS (
+        SELECT w.pid, u, v, w.unnormalized[array_position(w.normalized, pattern_notes.n)] AS note
+        FROM unnest(normalized_query) AS pattern_notes JOIN matching_windows AS w
+        ON true)
+SELECT window_note_matches.pid, name, array_agg(note) notes
+FROM window_note_matches
+JOIN Piece ON window_note_matches.pid = Piece.pid
+GROUP BY (window_note_matches.pid, Piece.name, u, v);
+	
+CREATE OR REPLACE VIEW test_palestrina_search AS SELECT search_sql_gin_exact('{"(0.0, 0.0)","(0.0,4.0)","(0.0,9.0)","(0.0,12.0)","(1.0,-2.0)","(1.0,5.0)","(1.0,10.0)","(1.0,14.0)"}');
 
 CREATE OR REPLACE FUNCTION excerpt(pid INTEGER, nids INTEGER[]) RETURNS TEXT AS $$
     from smrpy import excerpt
