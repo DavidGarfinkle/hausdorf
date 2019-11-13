@@ -21,6 +21,8 @@ class Piece:
   name: str = ""
   fmt: str = ""
   collection_id: int = 0
+  music21_xml: bytes = b''
+  notes: tuple = ()
 
   def __post_init__(self):
     stream = music21.converter.parse(self.data)
@@ -64,6 +66,13 @@ class Note:
     
     def __hash__(self):
       return hash((self.onset, self.pitch))
+
+    @classmethod
+    def from_m21(cls, p, idx):
+        return cls(onset=p.offset, pitch=p.pitch.ps, duration=p.duration.quarterLength, index=idx)
+
+    def __str__(self):
+        return str((float(self.onset), self.pitch))
 
     def insert_str(self, pid):
         return ("""
