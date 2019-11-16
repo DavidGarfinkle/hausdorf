@@ -27,6 +27,17 @@ CREATE TABLE IF NOT EXISTS NoteWindow (
   PRIMARY KEY (pid, u, v)
 );
 
+CREATE TABLE IF NOT EXISTS NoteWindow2 (
+  pid INTEGER REFERENCES Piece(pid),
+  onset_start NUMERIC,
+  onset_end NUMERIC,
+  u INTEGER,
+  v INTEGER,
+  notes POINT[],
+  normalized POINT[],
+  PRIMARY KEY (pid, u, v, onset_start, onset_end, normalized)
+);
+
 CREATE TABLE IF NOT EXISTS Posting (
   id SERIAL PRIMARY KEY,
   n POINT,

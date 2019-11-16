@@ -2,9 +2,10 @@ import ast
 import base64
 import music21
 import urllib.parse
+from itertools import combinations
 from collections import namedtuple
-from smrpy.indexers import NotePointSet
-from smrpy.piece import Piece, Note
+from smrpy.indexers import NotePointSet, m21_xml
+from smrpy.piece import Piece, Note, NoteWindow
 from smrpy.hausdorf import generate_normalized_windows_with_notes
 from smrpy.excerpt import coloured_excerpt
 
@@ -120,3 +121,23 @@ def excerpt(pid, nids):
     symbolic_data, = plpy_execute(symbolic_data_query, ("integer",), (pid,))
     return coloured_excerpt(symbolic_data['music21_xml'], nids)
 
+def generate_notewindows(points, window_size, pid=-1):
+    notes = [Note.from_point(i, p) for i, p in enumerate(points)]
+    for nw in NoteWindow.from_notes(pid, notes, window_size):
+        #yield (nw.pid, nw.notes[0].onset, nw.notes[-1].onset, nw.u.index, nw.v.index, [n.to_point() for n in nw.notes], [n.to_point() for n in nw.normalized_notes]) 
+        yield {
+            'pid': nw.pid,
+            'u': nw.u.index,
+            'v': nw.v.index,
+            'onset_start': nw.notes[0].onset,
+            'onset_end': nw.notes[-1].onset,
+            'notes': [n.to_point() for n in nw.notes],
+            'normalized': [n.to_point() for n in nw.normalized_notes]
+        }
+
+def symbolic_data_to_m21_xml(sd_b64):
+    sd = base64.b64decode(sd_b64)
+    stream = music21.converter.parse(sd)
+    xml = m21_xml(stream)
+    return xml.decode('utf-8')
+    #return base64.b64encode(xml).decode('utf-8')

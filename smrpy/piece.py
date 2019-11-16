@@ -3,6 +3,8 @@ import os
 import music21
 import base64
 import psycopg2.extensions
+import ast
+from itertools import combinations
 from smrpy import indexers
 from smrpy import smr_pb2
 from dataclasses import dataclass
@@ -27,8 +29,7 @@ class Piece:
   def __post_init__(self):
     stream = music21.converter.parse(self.data)
     stream.makeNotation(inPlace=True)
-    xml = m21_score_to_xml_write(stream)
-    self.music21_xml = xml
+    self.music21_xml = m21_score_to_xml_write(self.to_m21_xml())
     self.notes = [Note(n.offset, n.offset + n.duration.quarterLength, n.pitch.ps, i) for i, n in enumerate(indexers.NotePointSet(stream))]
   
   def insert_str(self):
@@ -53,6 +54,9 @@ class Piece:
         RETURNING pid;
         """, types[1:], values[1:])
 
+    def to_m21_xml(self):
+        return indexers.m21_xml(self.stream)
+
 @dataclass
 class Note:
     onset: float
@@ -74,6 +78,9 @@ class Note:
     def __str__(self):
         return str((float(self.onset), self.pitch))
 
+    def __repr__(self):
+        return str((self.index, self.onset, self.pitch, self.duration))
+
     def insert_str(self, pid):
         return ("""
         INSERT INTO Note(n, pid, nid)
@@ -94,10 +101,57 @@ class Note:
     def to_pb(self, piece_idx = None):
         return smr_pb2.Note(onset=self.onset, offset=None, pitch=int(self.pitch), piece_idx = piece_idx if piece_idx else self.index)
 
+    def to_point(self):
+        return (float(self.onset), self.pitch)
+
+    @classmethod
+    def from_point(cls, idx, inp):
+        p = ast.literal_eval(inp)
+        return cls(p[0], None, p[1], idx)
+
+
+def filter_bases(bases):
+    for i, (u, v) in enumerate(bases):
+        preds = []
+        preds.append(u.onset != v.onset)
+        if i > 1:
+            prev_u, prev_v = bases[i - 1]
+            preds.append(v.onset != prev_v.onset)
+        if all(preds):
+            yield (u, v)
+
 @dataclass
 class NoteWindow:
     pid: int
     u: int
     v: int
-    normalized: list
-    unnormalized: list
+    notes: tuple
+    normalized_notes: tuple = ()
+
+    def __post_init__(self):
+        self.normalized_notes = self.normalize()
+
+    @classmethod
+    def from_notes(cls, pid, notes, window_size):
+        num_windows = min(len(notes) - window_size + 1, len(notes))
+        windows = []
+        for i in range(num_windows):
+            bases = []
+            window = notes[i : i + window_size]
+            if i == num_windows - 1:
+                for u, v in combinations(window, 2):
+                    bases.append((u, v))
+            for j in range(i + 1, window_size):
+                bases.append((notes[i], notes[i + j]))
+
+            for u, v in filter_bases(bases):
+                yield cls(pid, u, v, notes)
+            
+    def normalize(self):
+        normalized_window = []
+        u, v = self.u, self.v
+        for note in self.notes:
+            normed_pitch = note.pitch - u.pitch
+            normed_onset = (note.onset - u.onset) / abs(v.onset - u.onset)
+            normalized_window.append(Note(normed_onset, 0, normed_pitch, note.index))
+        return normalized_window

@@ -5,6 +5,8 @@ import csv
 import music21
 import pandas as pd
 import numpy as np
+from smrpy.piece import Note
+from itertools import groupby
 
 us = music21.environment.UserSettings()
 us.restoreDefaults()
@@ -182,6 +184,26 @@ class NotePointSet(music21.stream.Stream):
         for n in new_notes:
             self.insert(n)
 
+def m21_score_to_xml_write(m21_score):
+    o = m21_score.write('xml')
+    with open(o, 'rb') as f:
+        xml = f.read()
+    os.remove(o)
+    return xml
+
+def m21_xml(stream):
+    nps = list(NotePointSet(stream))
+    nps_ids = [n.id for n in nps]
+    sort_by_onid = lambda n: n.original_note_id
+    nps_sorted_by_onid = sorted(nps, key=sort_by_onid)
+    for og_nid, nps_notes in groupby(nps_sorted_by_onid, key=sort_by_onid):
+        for nps_note in nps_notes:
+            note = Note.from_m21(nps_note, nps_ids.index(nps_note.id))
+            note_comment = music21.editorial.Comment(note.__repr__())
+            og_note = list(stream.flat.notes)[[n.id for n in list(stream.flat.notes)].index(og_nid)]
+            og_note.editorial.footnotes.append(note_comment)
+    return m21_score_to_xml_write(stream)
+        
 
 if __name__ == "__main__":
 
