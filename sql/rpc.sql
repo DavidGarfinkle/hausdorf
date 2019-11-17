@@ -87,3 +87,8 @@ CREATE OR REPLACE FUNCTION symbolic_data_to_m21_xml(symbolic_data TEXT) RETURNS 
     from smrpy import symbolic_data_to_m21_xml
     return symbolic_data_to_m21_xml(symbolic_data)
 $$ LANGUAGE plpython3u IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION colored_excerpt(m21_xml TEXT, notes POINT[], color TEXT) RETURNS TEXT AS $$
+    from smrpy import excerpt
+    return excerpt(m21_xml, notes, color)
+$$ LANGUAGE plpython3u IMMUTABLE STRICT;

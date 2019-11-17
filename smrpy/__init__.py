@@ -2,6 +2,8 @@ import ast
 import base64
 import music21
 import urllib.parse
+import xml.etree.ElementTree as ET
+import io
 from itertools import combinations
 from collections import namedtuple
 from smrpy.indexers import NotePointSet, m21_xml
@@ -140,4 +142,19 @@ def symbolic_data_to_m21_xml(sd_b64):
     stream = music21.converter.parse(sd)
     xml = m21_xml(stream)
     return xml.decode('utf-8')
-    #return base64.b64encode(xml).decode('utf-8')
+
+def excerpt(m21_xml, notes, color='#FF0000'):
+    smrpy_notes = [Note.from_point(-1, n) for n in notes]
+    root = ET.fromstring(m21_xml)
+    tree = ET.ElementTree(root)
+    for note_tag in root.findall('.//footnote/..'):
+        footnote_tag = note_tag.find('footnote')
+        note = Note.from_repr(footnote_tag.text)
+        if any(note.eq_2d(n) for n in smrpy_notes):
+            note_tag.attrib.update({'color': color})
+            notehead_tag = ET.SubElement(note_tag, 'notehead', attrib={'color': color, 'parantheses': 'no'})
+            notehead_tag.text = 'normal'
+    output = io.StringIO()
+    tree.write(output, encoding="unicode")
+    return output.getvalue()
+

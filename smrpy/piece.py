@@ -104,11 +104,18 @@ class Note:
     def to_point(self):
         return (float(self.onset), self.pitch)
 
+    def eq_2d(self, other):
+        return self.onset == other.onset and self.pitch == other.pitch
+
     @classmethod
     def from_point(cls, idx, inp):
         p = ast.literal_eval(inp)
         return cls(p[0], None, p[1], idx)
 
+    @classmethod
+    def from_repr(cls, repr_str):
+        p = ast.literal_eval(repr_str)
+        return cls(*p)
 
 def filter_bases(bases):
     for i, (u, v) in enumerate(bases):
