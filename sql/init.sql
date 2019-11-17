@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS Piece (
   music21_xml TEXT,
   composer TEXT,
   name TEXT,
+  filename TEXT,
   collection_id INTEGER
 );
 

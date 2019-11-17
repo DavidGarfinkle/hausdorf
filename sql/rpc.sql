@@ -14,13 +14,6 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER index_piece_after_insert BEFORE INSERT OR UPDATE OF symbolic_data ON Piece FOR EACH ROW EXECUTE PROCEDURE index_piece();
 
-CREATE OR REPLACE FUNCTION search(query POINT[]) RETURNS TABLE(pid INTEGER, nids INTEGER[], notes POINT[]) AS $$
-    from smrpy import search
-    return search(query)
-$$ LANGUAGE plpython3u IMMUTABLE STRICT;
-
---CREATE OR REPLACE FUNCTION normalize_window(window POINT[], u INTEGER, v INTEGER) RETURNS POINT[] AS $$
-
 CREATE OR REPLACE FUNCTION search_sql(normalized_query POINT[]) RETURNS TABLE(pid INTEGER, notes POINT[]) AS $$
     WITH
     pattern_notes AS (SELECT unnest(normalized_query) AS n),
@@ -52,6 +45,14 @@ GROUP BY (window_note_matches.pid, u, v);
 $$ LANGUAGE SQL;
 	
 CREATE OR REPLACE VIEW test_palestrina_search AS SELECT * FROM search_sql_gin_exact('{"(0.0, 0.0)","(0.0,4.0)","(0.0,9.0)","(0.0,12.0)","(1.0,-2.0)","(1.0,5.0)","(1.0,10.0)","(1.0,14.0)"}');
+
+--CREATE TYPE Occurrence AS (pid INTEGER, name TEXT, notes POINT[], excerpt TEXT) 
+--CREATE OR REPLACE FUNCTION search(query POINT[]) RETURNS SETOF Occurrence AS $$
+
+CREATE OR REPLACE FUNCTION search(query POINT[]) RETURNS TABLE(pid INTEGER, name TEXT, notes POINT[], excerpt TEXT) AS $$
+    from smrpy import search
+    return search(query)
+$$ LANGUAGE plpython3u IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION excerpt(pid INTEGER, nids INTEGER[]) RETURNS TEXT AS $$
     from smrpy import excerpt

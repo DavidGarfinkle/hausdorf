@@ -6,6 +6,7 @@ from smrpy.occurrence import filter_occurrences, OccurrenceFilters
 from smrpy.hausdorf import generate_normalized_windows_with_notes
 from smrpy import occurrence, piece
 from smrpy import indexers
+from smrpy.metadata import Metadata
 import requests
 import json
 from binascii import unhexlify
@@ -76,12 +77,7 @@ def index(piece_id):
     db_conn = connect_to_psql()
 
     symbolic_data = None
-    metadata = {
-        "pid": None,
-        "fmt": None,
-        "filename": None,
-        "collection": None
-    }
+    metadata_dict = {}
 
     # :ref https://werkzeug.palletsprojects.com/en/0.14.x/request_data/#how-does-it-parse
     if request.content_type == "multipart/form-data":
@@ -117,18 +113,18 @@ def index(piece_id):
         except ValueError:
             return Response(f"Request is malformed. It must have exactly one occurrence of the following byte string separating the JSON metadata and piece data, and this separator cannot be contained in the data itself: {SEPARATOR}")
         metadata_req = json.loads(metadata_bytes.decode("utf-8"))
-        metadata.update(metadata_req)
+        metadata_dict.update(metadata_req)
     else:
         return Response(f"Unsupported Content-Type: {request.content_type}", 415)
     if not symbolic_data:
         return Response("Failed to find piece data in POST request body", status=400)
 
     try:
-        p = piece.Piece(symbolic_data, pid=piece_id)
+        p = piece.Piece(symbolic_data, **metadata_dict)
     except music21.Music21Exception as e:
         return Response(f"failed to parse symbolic data with music21: {str(e)}", status=415)
 
-    logger.info(f"POST /index/<piece_id>: inserting piece of size {len(symbolic_data)} bytes, with metadata {metadata}")
+    logger.info(f"POST /index/<piece_id>: inserting piece of size {len(symbolic_data)} bytes, with metadata {metadata_dict}")
 
     with db_conn, db_conn.cursor() as cur:
         query, _, values = p.insert_str()

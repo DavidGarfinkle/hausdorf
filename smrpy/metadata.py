@@ -17,6 +17,7 @@ class Metadata:
     name: str
     composer: str
     collection_id: int
+    filename: str
 
     @classmethod
     def from_path(cls, tp, path):
@@ -38,7 +39,7 @@ def parse_chorale_piece_path(piece_path):
     basename, _ = os.path.splitext(os.path.basename(piece_path))
     index = int(basename[-3:])
     name = music21.converter.parse(piece_path).metadata.title
-    return Metadata(unique_index(index, collection_id), fmt, name, 'Bach', collection_id)
+    return Metadata(unique_index(index, collection_id), fmt, name, 'Bach', collection_id, piece_path)
 def parse_elvis_piece_path(piece_path):
     collection_id = 1
     basename, fmt = os.path.splitext(os.path.basename(piece_path))
@@ -47,7 +48,7 @@ def parse_elvis_piece_path(piece_path):
     piece_id = int(base[0])
     name = ' - '.join(base[1:-1])
     composer = base[-1]
-    return Metadata(piece_id, fmt, name, composer, collection_id)
+    return Metadata(piece_id, fmt, name, composer, collection_id, piece_path)
 def parse_palestrina_path(piece_path):
     collection_id=3
     fmt = 'mid'
@@ -56,7 +57,7 @@ def parse_palestrina_path(piece_path):
     name = " ".join(xs[:-2])
     num_voices = xs[-1]
     movement = xs[-2]
-    return Metadata(pid=None, fmt=fmt, name=f"{name} {movement[0].upper()}{movement[1:]} à {num_voices}", composer='Palestrina', collection_id=collection_id)
+    return Metadata(pid=None, fmt=fmt, name=f"{name} {movement[0].upper()}{movement[1:]} à {num_voices}", composer='Palestrina', collection_id=collection_id, piece_path=piece_path)
 
 @click.command()
 @click.option("-t", default="elvis", help=" || ".join(FILENAME_PARSERS))

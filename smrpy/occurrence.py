@@ -35,5 +35,5 @@ def notes_from_points(inp):
     return [Note(p[0], None, p[1], i) for i, p in enumerate(tuple_list)]
 
 def occ_to_occpb(occ):
-    notes = [note.to_pb(nid) for nid, note in zip(occ["nids"], notes_from_points(occ["notes"]))]
+    notes = [note.to_pb(-1) for note in zip(notes_from_points(occ["notes"]))]
     return smr_pb2.Occurrence(pid=occ["pid"], notes=notes)
