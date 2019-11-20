@@ -167,5 +167,5 @@ class NoteWindow:
         return normalized_window
 
     def to_string(self):
-        return "{" + ','.join(f'\"({x.onset},{x.pitch})\"' for x in notes) + "}"
+        return "{" + ','.join(f'\"({x.onset},{x.pitch})\"' for x in self.normalized_notes) + "}"
 

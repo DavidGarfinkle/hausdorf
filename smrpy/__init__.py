@@ -106,20 +106,20 @@ def search(query):
 
 def search(query):
     m = set()
-    notes = [Note.from_point(i, p) for i, p in enumerate(points)]
-    for nw in NoteWindow.from_notes(pid, notes, window_size):
+    notes = [Note.from_point(i, p) for i, p in enumerate(query)]
+    for nw in NoteWindow.from_notes(-1, notes, len(notes)):
         results = plpy.execute(f"""
-            SELECT search_sql_gin_exact('{nw.to_string}')
+            SELECT * FROM search_sql_gin_exact('{nw.to_string()}')
         """)
         for r in results:
             if filter_occurrence(query, r['notes'], len(r['notes']), range(-12, 12), 0, 0):
-                m += tuple(r.items())
-    return m
+                m.add((('pid', r['pid']), ('notes', tuple(r['notes']))))
+    return ((pid, notes) for ((_, pid), (_, notes)) in m)
 
 def filter_occurrence(query_points, occ_points, threshold, transpositions, intervening, inexact):
     return (
-        len(points) >= threshold and \
-        (query_points[0][1] - points[0][1]) % 12 in transpositions)
+        len(occ_points) >= threshold and \
+        (float(query_points[0][1]) - float(occ_points[0][1])) % 12 in transpositions)
 
 
 def excerpt(pid, nids):
