@@ -147,7 +147,7 @@ def index(piece_id):
     return Response(str(piece_id), mimetype='text/plain')
 
 def qstring(ps):
-    return "{" + ','.join(f'\"({x.onset},{x.pitch})\"' for x in ps) + "}"
+    return "'{" + ','.join(f'\"({x.onset},{x.pitch})\"' for x in ps) + "}'"
 
 @application.route("/excerpt", methods=["GET"])
 def excerpt():
@@ -190,18 +190,21 @@ def search():
     query_nps = indexers.NotePointSet(query_stream)
     query_notes = [(n.offset, n.pitch.ps) for n in query_nps]
     query_pb_notes = [piece.Note(n[0], None, n[1], i).to_pb() for i, n in enumerate(query_notes)]
-    resp = requests.get(POSTGREST_URI + "/rpc/search", params=('query=' + qstring(query_pb_notes))).json()
-    occurrences = [occurrence.occ_to_occpb(occ) for occ in resp]
 
-    occfilters = OccurrenceFilters(
-            transpositions = range(*tnps_ints),
-            intervening = intervening_ints,
-            inexact = inexact_ints)
+    with db_conn, db_conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT * FROM search({qstring(query_pb_notes)})
+        """)
+        occurrences = [{'pid': pid, 'name': name, 'notes': notes} for pid, name, notes in cur.fetchall()]
+    #resp = requests.get(POSTGREST_URI + "/rpc/search", params=('query=' + qstring(query_pb_notes))).json()
+    #occurrences = [occurrence.occ_to_occpb(occ) for occ in resp]
 
-    search_response = build_response(
-            db_conn,
-            filter_occurrences(occurrences, query_pb_notes, occfilters),
-            qargs)
+    #occfilters = OccurrenceFilters(
+    #        transpositions = range(*tnps_ints),
+    #        intervening = intervening_ints,
+    #        inexact = inexact_ints)
+
+    search_response = build_response(occurrences, qargs)
 
     if request.content_type == "application/json":
         return jsonify(search_response)

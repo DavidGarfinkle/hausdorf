@@ -58,6 +58,14 @@ CREATE OR REPLACE VIEW test_palestrina_search AS SELECT * FROM search_sql_gin_ex
 
 --CREATE TYPE Occurrence AS (pid INTEGER, name TEXT, notes POINT[], excerpt TEXT) 
 --CREATE OR REPLACE FUNCTION search(query POINT[]) RETURNS SETOF Occurrence AS $$
+CREATE OR REPLACE FUNCTION search(query POINT[]) RETURNS TABLE(pid INTEGER, name TEXT, notes POINT[]) AS $$
+    SELECT
+        Piece.pid,
+	Piece.name,
+	smrpy_search.notes
+    FROM smrpy_search(query)
+    JOIN Piece ON smrpy_search.pid = Piece.pid;
+$$ LANGUAGE SQL;
 
 CREATE OR REPLACE FUNCTION smrpy_search(query POINT[]) RETURNS TABLE(pid INTEGER, notes POINT[]) AS $$
     from smrpy import search

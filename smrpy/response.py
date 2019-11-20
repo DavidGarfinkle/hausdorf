@@ -16,59 +16,20 @@ class QueryArgs:
     collection: int
     query: str
 
-def build_response(db_conn, occs, qargs):
+def build_response(occs, qargs):
     pagination = Pagination(len(occs), qargs)
-    pagination.pages = [
-            [pb_occ_to_json(db_conn, o, get_excerpt = (i == qargs.page)) for o in occs[qargs.rpp * i : qargs.rpp * (i + 1)]]
-            for i in range(pagination.numPages)]
+
+    pagination.pages = [occs[qargs.rpp * i : qargs.rpp * (i + 1)] for i in range(pagination.numPages)]
+    for o in pagination.pages[qargs.page]:
+        pass
+        #o.update({'excerptUrl': url_for("excerpt", pid=o['pid'], nid=",".join(str(x) for x in excerptIndices))})
+
     return {
             "query": qargs.query,
             "pagination": asdict(pagination),
             "numPages": pagination.numPages,
             "range": pagination.range
             }
-
-def pb_occ_to_json(db_conn, pb_occ, get_excerpt):
-
-    excerptIndices = [n.piece_idx for n in pb_occ.notes]
-    pid = str(pb_occ.pid)
-
-    resp = {
-        "excerptFailed": False,
-        "excerptSkipped": True,
-        "pid": pid,
-        "excerptUrl": url_for("excerpt", pid=pid, nid=",".join(str(x) for x in excerptIndices))
-    }
-
-    with db_conn, db_conn.cursor() as cur:
-        cur.execute(f"SELECT name FROM Piece WHERE pid={pb_occ.pid}")
-        if cur.rowcount == 0:
-            raise DatabasesOutOfSyncError(f"pid {pb_occ.pid} does not exist in the flask database")
-        name = cur.fetchone()
-        if name and name[0]:
-            resp["name"] = " ".join(os.path.basename(name[0]).split("_")[1:])
-        else:
-            resp["name"] = "no name info"
-
-    """
-    if get_excerpt:
-        try:
-            raise Exception("skipping server-side rendering")
-            xml = coloured_excerpt(db_conn, excerptIndices, pb_occ.pid)
-        except Exception as e:
-            b64_xml = "excerpt failed: " + str(e)
-            resp["excerptFailed"] = True
-        else:
-            b64_xml = base64.b64encode(bytes(xml, encoding='utf-8')).decode('utf-8')
-            resp["excerptSkipped"] = False
-    else:
-        b64_xml = ""
-    """
-    b64_xml = ""
-
-    resp["xmlBase64"] = b64_xml
-
-    return resp
 
 @dataclass
 class Pagination:
