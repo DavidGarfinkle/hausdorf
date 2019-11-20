@@ -104,7 +104,7 @@ def search(query):
     return pg_results
 """
 
-def search(query):
+def search(query, threshold, transpositions, intervening, inexact):
     m = set()
     notes = [Note.from_point(i, p) for i, p in enumerate(query)]
     for nw in NoteWindow.from_notes(-1, notes, len(notes)):
@@ -112,14 +112,17 @@ def search(query):
             SELECT * FROM search_sql_gin_exact('{nw.to_string()}')
         """)
         for r in results:
-            if filter_occurrence(query, r['notes'], len(r['notes']), range(-12, 12), 0, 0):
+            if filter_occurrence([n.to_point() for n in nw.normalized_notes], r['notes'], threshold, transpositions, intervening, inexact):
                 m.add((('pid', r['pid']), ('notes', tuple(r['notes']))))
     return ((pid, notes) for ((_, pid), (_, notes)) in m)
 
 def filter_occurrence(query_points, occ_points, threshold, transpositions, intervening, inexact):
-    return (
+    res = (
         len(occ_points) >= threshold and \
         (float(query_points[0][1]) - float(occ_points[0][1])) % 12 in transpositions)
+    if not res:
+        raise Exception(query_points, occ_points, threshold, transpositions, intervening, inexact)
+    return res
 
 
 def excerpt(pid, nids):

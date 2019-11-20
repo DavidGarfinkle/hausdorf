@@ -146,7 +146,7 @@ class NoteWindow:
         windows = []
         for i in range(num_windows):
             bases = []
-            window = notes[i : i + window_size - 1]
+            window = notes[i : i + window_size]
             if i == num_windows - 1:
                 for u, v in combinations(window, 2):
                     bases.append((u, v))

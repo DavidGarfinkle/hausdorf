@@ -61,7 +61,7 @@ CREATE OR REPLACE VIEW test_palestrina_search AS SELECT * FROM search_sql_gin_ex
 
 CREATE OR REPLACE FUNCTION smrpy_search(query POINT[]) RETURNS TABLE(pid INTEGER, notes POINT[]) AS $$
     from smrpy import search
-    return search(query)
+    return search(query, len(query), range(-12, 12), (), ())
 $$ LANGUAGE plpython3u IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION excerpt(pid INTEGER, nids INTEGER[]) RETURNS TEXT AS $$
