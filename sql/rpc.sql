@@ -12,22 +12,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER index_piece_after_insert BEFORE INSERT OR UPDATE OF symbolic_data ON Piece FOR EACH ROW EXECUTE PROCEDURE index_piece();
+CREATE TRIGGER index_piece_before_insert BEFORE INSERT OR UPDATE OF symbolic_data ON Piece FOR EACH ROW EXECUTE PROCEDURE index_piece();
 
-CREATE OR REPLACE FUNCTION search_sql(normalized_query POINT[]) RETURNS TABLE(pid INTEGER, notes POINT[]) AS $$
-    WITH
-    pattern_notes AS (SELECT unnest(normalized_query) AS n),
-    postings AS (
-            SELECT Note.n, Note.pid, Note.nid, Posting.u, Posting.v
-            FROM Posting JOIN Note ON Note.pid = Posting.pid AND Note.nid = Posting.nid
-            JOIN pattern_notes ON Posting.n ~= pattern_notes.n),
-    occs_by_window AS (
-        SELECT postings.pid, array_agg(postings.n) AS notes, postings.u, postings.v
-        FROM postings
-        GROUP BY (postings.pid, postings.u, postings.v))
-    SELECT occs_by_window.pid, occs_by_window.notes
-    FROM occs_by_window;
-$$ LANGUAGE SQL;
+CREATE OR REPLACE FUNCTION index_piece_after_insert() RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO Note(pid, n) SELECT NEW.pid, n FROM generate_notes(NEW.symbolic_data);
+    PERFORM index_piece_notewindows(NEW.pid, 40);
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER index_piece_after_insert AFTER INSERT OR UPDATE OF symbolic_data ON Piece FOR EACH ROW EXECUTE PROCEDURE index_piece_after_insert();
+
+--CREATE OR REPLACE FUNCTION search_sql(normalized_query POINT[]) RETURNS TABLE(pid INTEGER, notes POINT[]) AS $$
+--    WITH
+--    pattern_notes AS (SELECT unnest(normalized_query) AS n),
+--    postings AS (
+--            SELECT Note.n, Note.pid, Note.nid, Posting.u, Posting.v
+--            FROM Posting JOIN Note ON Note.pid = Posting.pid AND Note.nid = Posting.nid
+--            JOIN pattern_notes ON Posting.n ~= pattern_notes.n),
+--    occs_by_window AS (
+--        SELECT postings.pid, array_agg(postings.n) AS notes, postings.u, postings.v
+--        FROM postings
+--        GROUP BY (postings.pid, postings.u, postings.v))
+--    SELECT occs_by_window.pid, occs_by_window.notes
+--    FROM occs_by_window;
+--$$ LANGUAGE SQL;
 
 CREATE OR REPLACE FUNCTION search_sql_gin_exact(normalized_query POINT[]) RETURNS TABLE(pid INTEGER, notes POINT[]) AS
 $$
@@ -79,10 +89,22 @@ AS $$
         HAVING count(*) > threshold
 $$ LANGUAGE SQL;
 
-CREATE OR REPLACE FUNCTION generate_notewindows(notes POINT[], window_size INTEGER) RETURNS TABLE(like NoteWindow2) AS $$
+CREATE OR REPLACE FUNCTION generate_notewindows(notes POINT[], window_size INTEGER) RETURNS TABLE(like NoteWindow) AS $$
     from smrpy import generate_notewindows
     return generate_notewindows(notes, window_size)
 $$ LANGUAGE plpython3u IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION index_piece_notewindows(pid INTEGER, window_size INTEGER) RETURNS VOID AS $$
+DECLARE
+    notes POINT[];
+BEGIN
+    SELECT array_agg(Note.n ORDER BY (Note.n[0], Note.n[1])) INTO notes FROM Note WHERE Note.pid=index_piece_notewindows.pid;
+    DELETE FROM NoteWindow WHERE NoteWindow.pid=index_piece_notewindows.pid;
+    INSERT INTO NoteWindow(pid, u, v, onset_start, onset_end, unnormalized, normalized)
+	SELECT index_piece_notewindows.pid, u, v, onset_start, onset_end, unnormalized, normalized FROM generate_notewindows(notes, window_size);
+    UPDATE Piece SET window_size = index_piece_notewindows.window_size WHERE Piece.pid = index_piece_notewindows.pid;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION symbolic_data_to_m21_xml(symbolic_data TEXT) RETURNS TEXT AS $$
     from smrpy import symbolic_data_to_m21_xml
@@ -93,3 +115,18 @@ CREATE OR REPLACE FUNCTION colored_excerpt(m21_xml TEXT, notes POINT[], color TE
     from smrpy import excerpt
     return excerpt(m21_xml, notes, color)
 $$ LANGUAGE plpython3u IMMUTABLE STRICT;
+
+
+CREATE OR REPLACE FUNCTION generate_notes(symbolic_data TEXT) RETURNS SETOF Note AS $$
+    from smrpy import generate_notes
+    return generate_notes(symbolic_data)
+$$ LANGUAGE plpython3u IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION index_piece_notes(pid INTEGER) RETURNS VOID AS $$
+DECLARE
+    sd TEXT;
+BEGIN
+    SELECT symbolic_data INTO sd FROM Piece WHERE Piece.pid=index_piece_notes.pid;
+    INSERT INTO Note(pid, n) SELECT index_piece_notes.pid, n FROM generate_notes(sd);
+END;
+$$ LANGUAGE plpgsql;

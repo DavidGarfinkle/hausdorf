@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS Piece (
   composer TEXT,
   name TEXT,
   filename TEXT,
-  collection_id INTEGER
+  collection_id INTEGER,
+  window_size INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS Note (
@@ -17,35 +18,23 @@ CREATE TABLE IF NOT EXISTS Note (
 );
 
 CREATE TABLE IF NOT EXISTS NoteWindow (
-  u INTEGER,
-  v INTEGER,
-  normalized POINT[],
-  unnormalized POINT[],
-  pid INTEGER REFERENCES Piece(pid),
-  len INTEGER,
-  FOREIGN KEY (pid, u) REFERENCES Note(pid, nid),
-  FOREIGN KEY (pid, v) REFERENCES Note(pid, nid),
-  PRIMARY KEY (pid, u, v)
-);
-
-CREATE TABLE IF NOT EXISTS NoteWindow2 (
   pid INTEGER REFERENCES Piece(pid),
   onset_start NUMERIC,
   onset_end NUMERIC,
-  u INTEGER,
+  u INTEGER, -- todo make this a single "scale" factor
   v INTEGER,
-  notes POINT[],
+  unnormalized POINT[],
   normalized POINT[],
-  PRIMARY KEY (pid, u, v, onset_start, onset_end, normalized)
+  PRIMARY KEY (pid, u, v, onset_start, onset_end)
 );
 
-CREATE TABLE IF NOT EXISTS Posting (
-  id SERIAL PRIMARY KEY,
-  n POINT,
-  pid INTEGER,
-  u INTEGER,
-  v INTEGER,
-  nid INTEGER,
-  FOREIGN KEY (pid, nid) REFERENCES Note(pid, nid)
-  --FOREIGN KEY (pid, u, v) REFERENCES NormalizedWindow(pid, u, v)
-);
+--CREATE TABLE IF NOT EXISTS Posting (
+--  id SERIAL PRIMARY KEY,
+--  n POINT,
+--  pid INTEGER,
+--  u INTEGER,
+--  v INTEGER,
+--  nid INTEGER,
+--  FOREIGN KEY (pid, nid) REFERENCES Note(pid, nid)
+--  --FOREIGN KEY (pid, u, v) REFERENCES NormalizedWindow(pid, u, v)
+--);

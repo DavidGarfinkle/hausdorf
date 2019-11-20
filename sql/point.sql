@@ -41,3 +41,5 @@ create operator class point_ops
         operator 4 >=,
         operator 5 >,
         function 1 btpointcmp(point, point);
+
+CREATE INDEX idx_gin_windows ON NoteWindow USING GIN(normalized);

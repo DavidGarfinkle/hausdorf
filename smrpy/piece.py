@@ -140,19 +140,22 @@ class NoteWindow:
 
     @classmethod
     def from_notes(cls, pid, notes, window_size):
-        num_windows = min(len(notes) - window_size + 1, len(notes))
+        assert window_size > 1
+        # :todo handle case window_size > len(notes)
+        num_windows = len(notes) - window_size + 1
         windows = []
         for i in range(num_windows):
             bases = []
-            window = notes[i : i + window_size]
+            window = notes[i : i + window_size - 1]
             if i == num_windows - 1:
                 for u, v in combinations(window, 2):
                     bases.append((u, v))
-            for j in range(i + 1, window_size):
-                bases.append((notes[i], notes[i + j]))
+            else:
+                for n in window[1:]:
+                    bases.append((window[0], n))
 
             for u, v in filter_bases(bases):
-                yield cls(pid, u, v, notes)
+                yield cls(pid, u, v, window)
             
     def normalize(self):
         normalized_window = []
@@ -162,3 +165,7 @@ class NoteWindow:
             normed_onset = (note.onset - u.onset) / abs(v.onset - u.onset)
             normalized_window.append(Note(normed_onset, 0, normed_pitch, note.index))
         return normalized_window
+
+    def to_string(self):
+        return "{" + ','.join(f'\"({x.onset},{x.pitch})\"' for x in notes) + "}"
+

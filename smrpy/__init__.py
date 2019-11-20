@@ -105,18 +105,22 @@ def search(query):
 """
 
 def search(query):
-    #stream = music21.converter.parse(query)
-    #points = [(x.onset, x.pitch.ps) for x in NotePointSet(query)]
-    notes = notes_from_points(query)
-    m = []
-    for (u, v), window, _ in generate_normalized_windows_with_notes(notes, len(notes)):
-        ps = [(n.onset, n.pitch) for n in window]
-        query_string = "SELECT * FROM search_sql('{" + ",".join(f'"({x[0]},{x[1]})"' for x in ps) + "}')"
-        results = plpy_execute(query_string, (), ())
+    m = set()
+    notes = [Note.from_point(i, p) for i, p in enumerate(points)]
+    for nw in NoteWindow.from_notes(pid, notes, window_size):
+        results = plpy.execute(f"""
+            SELECT search_sql_gin_exact('{nw.to_string}')
+        """)
         for r in results:
-            if tuple(r['nids']) not in (tuple(x['nids']) for x in m):
-                m.extend(results)
+            if filter_occurrence(query, r['notes'], len(r['notes']), range(-12, 12), 0, 0):
+                m += tuple(r.items())
     return m
+
+def filter_occurrence(query_points, occ_points, threshold, transpositions, intervening, inexact):
+    return (
+        len(points) >= threshold and \
+        (query_points[0][1] - points[0][1]) % 12 in transpositions)
+
 
 def excerpt(pid, nids):
     symbolic_data_query = "SELECT music21_xml FROM Piece WHERE pid=%s"
@@ -133,7 +137,7 @@ def generate_notewindows(points, window_size, pid=-1):
             'v': nw.v.index,
             'onset_start': nw.notes[0].onset,
             'onset_end': nw.notes[-1].onset,
-            'notes': [n.to_point() for n in nw.notes],
+            'unnormalized': [n.to_point() for n in nw.notes],
             'normalized': [n.to_point() for n in nw.normalized_notes]
         }
 
@@ -158,3 +162,11 @@ def excerpt(m21_xml, notes, color='#FF0000'):
     tree.write(output, encoding="unicode")
     return output.getvalue()
 
+def generate_notes(symbolic_data):
+    st = music21.converter.parse(base64.b64decode(symbolic_data))
+    nps = indexers.NotePointSet(st)
+    for n in nps:
+        yield {
+            'pid': -1,
+            'n': Note.from_m21(n, -1).to_point()
+        }
