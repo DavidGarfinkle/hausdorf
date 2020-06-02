@@ -71,16 +71,14 @@ function renderOccurrencePanel(i, occJson, xml) {
 function getAndRenderPageExcerpts(pageJsonArray) {
     for (var i=0; i < pageJsonArray.length; i++) {
         console.log(i);
-        (function(j) {
-            var res = $.get({url: pageJsonArray[j]['excerptUrl'], dataType:"text"})
-                .done(function(res) {
-                    console.log(res)
-                    renderOccurrencePanel(j, pageJsonArray[j], res)
-                })
-                .catch(function(res) {
-                    console.log(res)
-                });
-        })(i);
+        $.get({url: pageJsonArray[i]['excerptUrl'], dataType:"text"})
+            .done(function(res) {
+                console.log(res)
+                renderOccurrencePanel(j, pageJsonArray[i], res)
+            })
+            .catch(function(res) {
+                console.log(res)
+            });
     }
 }
 
