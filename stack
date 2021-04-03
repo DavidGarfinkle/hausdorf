@@ -1,0 +1,16 @@
+-- to get columns from your table-returning function...
+SELECT * FROM generate_notewindows('{"(0, 0)","(1, 1)", "(2, 2)"}'::POINT[], 2);
+
+-- do an insert note db function
+
+-- then an insert window db function
+
+
+
+
+
+
+
+
+1) measure map. each occurrence comes with a start measure and end measure
+2) excerptUrl with measures argument

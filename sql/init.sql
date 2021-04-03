@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS Note (
   PRIMARY KEY (pid, nid)
 );
 
+CREATE TABLE IF NOT EXISTS MeasureOnsetMap (
+  onset NUMERIC,
+  mid INTEGER,
+  pid INTEGER REFERENCES PIECE(pid),
+  PRIMARY KEY (pid, mid, onset)
+);
+
 CREATE TABLE IF NOT EXISTS NoteWindow (
   pid INTEGER REFERENCES Piece(pid),
   onset_start NUMERIC,

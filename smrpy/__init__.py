@@ -7,7 +7,7 @@ import io
 from itertools import combinations
 from collections import namedtuple
 from smrpy.indexers import NotePointSet, m21_xml
-from smrpy.piece import Piece, Note, NoteWindow
+from smrpy.piece import Piece, Note, NoteWindow, m21_score_to_xml_write
 from smrpy.hausdorf import generate_normalized_windows_with_notes
 from smrpy.excerpt import coloured_excerpt
 
@@ -116,15 +116,6 @@ def search(query, threshold, transpositions, intervening, inexact):
                 m.add((('pid', r['pid']), ('notes', tuple(r['notes']))))
     return ((pid, notes) for ((_, pid), (_, notes)) in m)
 
-def filter_occurrence(query_points, occ_points, threshold, transpositions, intervening, inexact):
-    res = (
-        len(occ_points) >= threshold and \
-        (float(query_points[0][1]) - float(occ_points[0][1])) % 12 in transpositions)
-    if not res:
-        raise Exception(query_points, occ_points, threshold, transpositions, intervening, inexact)
-    return res
-
-
 def excerpt(pid, nids):
     symbolic_data_query = "SELECT music21_xml FROM Piece WHERE pid=%s"
     symbolic_data, = plpy_execute(symbolic_data_query, ("integer",), (pid,))
@@ -150,9 +141,12 @@ def symbolic_data_to_m21_xml(sd_b64):
     xml = m21_xml(stream)
     return xml.decode('utf-8')
 
-def excerpt(m21_xml, notes, color='#FF0000'):
+def excerpt(m21_xml, notes, measure_start, measure_end, color='#FF0000'):
     smrpy_notes = [Note.from_point(-1, n) for n in notes]
-    root = ET.fromstring(m21_xml)
+    stream = music21.converter.parse(m21_xml)
+    excerpt = stream.measures(numberStart=measure_start, numberEnd=measure_end)
+    m21_xml_excerpt = m21_to_xml_write(excerpt)
+    root = ET.fromstring(m21_xml_excerpt)
     tree = ET.ElementTree(root)
     for note_tag in root.findall('.//footnote/..'):
         footnote_tag = note_tag.find('footnote')
@@ -165,11 +159,22 @@ def excerpt(m21_xml, notes, color='#FF0000'):
     tree.write(output, encoding="unicode")
     return output.getvalue()
 
-def generate_notes(symbolic_data):
-    st = music21.converter.parse(base64.b64decode(symbolic_data))
+def generate_notes(music21_xml):
+    st = music21.converter.parse(music21_xml)
     nps = indexers.NotePointSet(st)
     for n in nps:
         yield {
             'pid': -1,
             'n': Note.from_m21(n, -1).to_point()
+        }
+
+def measure_onset_map(music21_xml):
+    st = music21.converter.parse(music21_xml)
+    mm = st.flattenParts().measureOffsetMap()
+    for onset, mms in mm.items():
+        measure, = mms
+        yield {
+            'pid': -1,
+            'mid': measure.number,
+            'onset': onset
         }

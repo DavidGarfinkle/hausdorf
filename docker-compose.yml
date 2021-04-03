@@ -11,20 +11,8 @@ services:
       - ./sql:/docker-entrypoint-initdb.d
       - ./postgres-data:/var/lib/postgresql/data
       - ./smrpy:/smrpy
-  pgrst:
-    image: postgrest/postgrest:latest
-    environment:
-      - PGRST_DB_URI=postgres://postgres:postgres@db:5432/postgres
-      - PGRST_DB_SCHEMA=public
-      - PGRST_DB_ANON_ROLE=postgres
-    depends_on:
-      - "db"
-    ports:
-      - "3000:3000"
   nginx:
     image: nginx:latest
-    depends_on:
-      - "pgrst"
     volumes:
       - ./conf/nginx.docker-compose:/etc/nginx/conf.d/cbsmr.conf
       - ./smrpy/socket:/cbsmr/smrpy/socket
@@ -44,6 +32,5 @@ services:
     volumes:
       - ./smrpy/socket:/cbsmr/smrpy/socket
     depends_on:
-      - "pgrst"
       - "db"
       - "nginx"

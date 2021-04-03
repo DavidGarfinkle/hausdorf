@@ -16,8 +16,9 @@ CREATE TRIGGER index_piece_before_insert BEFORE INSERT OR UPDATE OF symbolic_dat
 
 CREATE OR REPLACE FUNCTION index_piece_after_insert() RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO Note(pid, n) SELECT NEW.pid, n FROM generate_notes(NEW.symbolic_data);
+    INSERT INTO Note(pid, n) SELECT NEW.pid, n FROM generate_notes(NEW.music21_xml);
     PERFORM index_piece_notewindows(NEW.pid, 40);
+    INSERT INTO MeasureOnsetMap(pid, mid, onset) SELECT NEW.pid, mid, onset FROM smrpy_measure_onset_map(NEW.music21_xml);
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -120,6 +121,15 @@ CREATE OR REPLACE FUNCTION symbolic_data_to_m21_xml(symbolic_data TEXT) RETURNS 
 $$ LANGUAGE plpython3u IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION colored_excerpt(m21_xml TEXT, notes POINT[], color TEXT) RETURNS TEXT AS $$
+    WITH mids AS (
+	SELECT array_agg(mid ASC) AS mids
+	FROM unnest(notes) AS note JOIN MeasureOnsetMap
+	ON note[0] = MeasureOnsetMap.onset)
+    SELECT smrpy_excerpt(m21_xml, notes, mids[array_lower(mids, 1)], mids[array_upper(mids, 1)], color);
+$$ LANGUAGE SQL;
+
+
+CREATE OR REPLACE FUNCTION smrpy_excerpt(m21_xml TEXT, notes POINT[], measure_start INTEGER, measure_end INTEGER, color TEXT) RETURNS TEXT AS $$
     from smrpy import excerpt
     return excerpt(m21_xml, notes, color)
 $$ LANGUAGE plpython3u IMMUTABLE STRICT;
@@ -138,3 +148,8 @@ BEGIN
     INSERT INTO Note(pid, n) SELECT index_piece_notes.pid, n FROM generate_notes(sd);
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION smrpy_measure_onset_map(symbolic_data TEXT) RETURNS SETOF MeasureOnsetMap AS $$
+    from smrpy import measure_onset_map
+    return measure_onset_map(symbolic_data)
+$$ LANGUAGE plpython3u IMMUTABLE STRICT;
